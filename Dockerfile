@@ -13,10 +13,8 @@ RUN \
     apt-get install -y python python-dev python-pip python-virtualenv && \
     rm -rf /var/lib/apt/lists/*
 
-# Install PySpark and Numpy
-RUN \
-    pip install numpy && \
-    pip install pyspark
+ADD requirements.txt /
+RUN pip install -r requirements.txt
 
 COPY postgresql-42.2.8.jar .
 ENV SPARK_CLASSPATH=/postgresql-42.2.8.jar
