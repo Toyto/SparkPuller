@@ -8,6 +8,7 @@ from pyspark.sql.functions import (
     to_timestamp,
     lit,
     length,
+    coalesce,
 )
 
 
@@ -86,7 +87,58 @@ encounters = encounter_df.select(
     to_timestamp(col('period')['end']).alias('end_date'),
     col('type')[0]['coding'][0]['code'].alias('type_code'),
     col('type')[0]['coding'][0]['system'].alias('type_code_system'),
-).filter(length(col('patient_id')) == 36)  # filter out incorrect patient ids
+).filter(
+    length(col('patient_id')) == 36 # filter out incorrect patient ids
+)
+
+procedures = procedure_df.select(
+    col('id').alias('source_id'), 
+    col('subject')['reference'].substr(9, 36).alias('patient_id'), 
+    col('context')['reference'].substr(11, 36).alias('encounter_id'), 
+    coalesce(
+        to_date('performedDateTime'), 
+        to_date(col('performedPeriod')['start'])
+    ).alias('procedure_date'), 
+    col('code')['coding'][0]['code'].alias('type_code'), 
+    col('code')['coding'][0]['system'].alias('type_code_system'),
+).filter(
+    length(col('patient_id')) == 36
+).filter(
+    length(col('encounter_id')) == 36
+)
+
+observations = observation_df.select(
+    col('id').alias('source_id'), 
+    col('subject')['reference'].substr(9, 36).alias('patient_id'), 
+    col('context')['reference'].substr(11, 36).alias('encounter_id'),
+    to_date('effectiveDateTime').alias('observation_date'),
+    coalesce(
+        col('code')['coding'][0]['code'], 
+        col('component')['code']['coding'][0]['code'][0],
+    ).alias('type_code'),
+    coalesce(
+        col('code')['coding'][0]['system'], 
+        col('component')['code']['coding'][0]['system'][0],
+    ).alias('type_code_system'),
+    coalesce(
+        col('valueQuantity')['value'], 
+        col('component')['valueQuantity']['value'][0],
+    ).alias('value'),
+    coalesce(
+        col('valueQuantity')['unit'], 
+        col('component')['valueQuantity']['unit'][0],
+    ).alias('unit_code'),
+    coalesce(
+        col('valueQuantity')['system'], 
+        col('component')['valueQuantity']['system'][0],
+    ).alias('unit_code_system'),
+).filter(
+    length(col('patient_id')) == 36
+).filter(
+    length(col('encounter_id')) == 36
+).filter(
+    col('value').isNotNull()
+)
 
 patients.write.format('jdbc').options(
     url=DB_URL,
@@ -98,6 +150,20 @@ patients.write.format('jdbc').options(
 encounters.write.format('jdbc').options(
     url=DB_URL,
     dbtable='encounter',
+    driver='org.postgresql.Driver',
+    stringtype='unspecified',
+).mode('append').save()
+
+procedures.write.format('jdbc').options(
+    url=DB_URL,
+    dbtable='procedure',
+    driver='org.postgresql.Driver',
+    stringtype='unspecified',
+).mode('append').save()
+
+observations.write.format('jdbc').options(
+    url=DB_URL,
+    dbtable='observation',
     driver='org.postgresql.Driver',
     stringtype='unspecified',
 ).mode('append').save()
