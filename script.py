@@ -79,4 +79,9 @@ patients = patients_by_races.join(
     how='left_outer'
 ).drop(col('source_id_dummy'))
 
-patients.show(10)
+patients.write.format('jdbc').options(
+    url=DB_URL,
+    dbtable='patient',
+    driver='org.postgresql.Driver',
+    stringtype='unspecified',
+).mode('append').save()
