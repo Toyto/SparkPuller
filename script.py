@@ -7,7 +7,7 @@ from pyspark.sql.functions import (
     to_date,
     to_timestamp,
     lit,
-    round as _round,
+    length,
 )
 
 
@@ -76,12 +76,28 @@ patients_by_ethnicity = patient_df.select(
 patients = patients_by_races.join(
     patients_by_ethnicity,
     patients_by_races.source_id == patients_by_ethnicity.source_id_dummy,
-    how='left_outer'
+    how='left_outer',
 ).drop(col('source_id_dummy'))
+
+encounters = encounter_df.select(
+    col('id').alias('source_id'),
+    col('subject')['reference'].substr(9, 36).alias('patient_id'),  # hack to get just a patient_id
+    to_timestamp(col('period')['start']).alias('start_date'),
+    to_timestamp(col('period')['end']).alias('end_date'),
+    col('type')[0]['coding'][0]['code'].alias('type_code'),
+    col('type')[0]['coding'][0]['system'].alias('type_code_system'),
+).filter(length(col('patient_id')) == 36)  # filter out incorrect patient ids
 
 patients.write.format('jdbc').options(
     url=DB_URL,
     dbtable='patient',
+    driver='org.postgresql.Driver',
+    stringtype='unspecified',
+).mode('append').save()
+
+encounters.write.format('jdbc').options(
+    url=DB_URL,
+    dbtable='encounter',
     driver='org.postgresql.Driver',
     stringtype='unspecified',
 ).mode('append').save()
