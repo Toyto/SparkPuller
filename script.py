@@ -1,14 +1,13 @@
 import json
-import requests
 from urllib import urlopen
 from pyspark import SparkContext
 from pyspark.sql.functions import (
     col,
     to_date,
     to_timestamp,
-    lit,
     length,
     coalesce,
+    date_format,
 )
 
 
@@ -167,3 +166,40 @@ observations.write.format('jdbc').options(
     driver='org.postgresql.Driver',
     stringtype='unspecified',
 ).mode('append').save()
+
+print 'Patients: {}'.format(patients.count())
+print 'Encounters: {}'.format(encounters.count())
+print 'Procedures: {}'.format(procedures.count())
+print 'Observations: {}'.format(observations.count())
+print 'Patients by gender: {}'.format(patients.groupBy(col('gender')).count())
+
+print 'Top 10 procedures'
+procedures.groupBy(col('type_code')).count().orderBy(col('count').desc()).limit(10).show()
+
+print 'The most popular days for encounter'
+encounters.select(
+    date_format(
+        col('start_date'), 'E'
+    ).alias(
+        'week_day'
+    )
+).groupBy(
+    'week_day'
+).count(
+).orderBy(
+    col('count').desc()
+).limit(3).show()
+
+print 'The least popular days for encounters'
+encounters.select(
+    date_format(
+        col('start_date'), 'E'
+    ).alias(
+        'week_day'
+    )
+).groupBy(
+    'week_day'
+).count(
+).orderBy(
+    col('count')
+).limit(4).show()
